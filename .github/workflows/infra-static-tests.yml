@@ -1,0 +1,37 @@
+name: Terraform Static Analysis
+
+on:
+  push:
+    paths:
+      - 'infra/tf-app/**'
+  pull_request:
+    paths:
+      - 'infra/tf-app/**'
+
+jobs:
+  static-analysis:
+    name: Run TFLint and Format Check
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: infra/tf-app
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform Format
+        run: terraform fmt -check -diff
+
+      - name: Install TFLint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+
+      - name: Run TFLint
+        run: tflint --init && tflint
