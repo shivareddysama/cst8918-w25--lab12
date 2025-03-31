@@ -1,0 +1,76 @@
+name: Terraform Drift Detection
+
+on:
+  schedule:
+    - cron: '0 5 * * *'  # Every day at 5:00 UTC
+  workflow_dispatch:
+
+jobs:
+  drift-detection:
+    name: Check for Infrastructure Drift
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/tf-app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan (Drift Detection)
+        run: terraform plan -detailed-exitcode -no-color || echo "exit_code=$?" >> $GITHUB_ENV
+
+      - name: Create Issue if Drift Detected
+        if: env.exit_code == '2'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueTitle = "⚠️ Drift detected in Terraform infrastructure"
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+            });
+
+            const exists = issues.data.find(issue => issue.title === issueTitle);
+            if (!exists) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: "Drift was detected in the last run of the drift detection workflow. Please run `terraform apply` to reconcile.",
+              });
+            }
+
+      - name: Close Existing Drift Issues if No Drift
+        if: env.exit_code == '0'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+            });
+
+            for (const issue of issues.data) {
+              if (issue.title === "⚠️ Drift detected in Terraform infrastructure") {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: "closed",
+                  state_reason: "completed",
+                });
+              }
+            }

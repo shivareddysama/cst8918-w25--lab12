@@ -2,17 +2,13 @@ name: Terraform Static Analysis
 
 on:
   push:
-    paths:
-      - 'infra/tf-app/**'
+    branches: ["**"]
   pull_request:
-    paths:
-      - 'infra/tf-app/**'
+    branches: ["**"]
 
 jobs:
   static-analysis:
-    name: Run TFLint and Format Check
     runs-on: ubuntu-latest
-
     defaults:
       run:
         working-directory: infra/tf-app
@@ -26,12 +22,13 @@ jobs:
         with:
           terraform_version: 1.5.7
 
-      - name: Terraform Format
+      - name: Terraform Format Check
         run: terraform fmt -check -diff
 
-      - name: Install TFLint
-        run: |
-          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      - name: Terraform Validate
+        run: terraform validate
 
-      - name: Run TFLint
-        run: tflint --init && tflint
+      - name: Install Checkov
+        run: |
+          pip install checkov
+          checkov -d .
